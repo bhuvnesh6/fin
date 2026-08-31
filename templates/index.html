@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIN — Rocket Fin Stability &amp; Flutter Design Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="brand-group">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2c2.8 3.1 4.2 6.7 4.2 10.8 0 2-.4 3.9-1.2 5.7l-3-1.7-3 1.7c-.8-1.8-1.2-3.7-1.2-5.7C7.8 8.7 9.2 5.1 12 2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M8.3 15.8 5 19.5l2.2-.4M15.7 15.8 19 19.5l-2.2-.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="10.5" r="1.3" fill="currentColor"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand">FIN<small>STABILITY &amp; FLUTTER OPTIMIZER</small></div>
+      <div class="subtitle">Barrowman center-of-pressure · fin flutter boundary · trapezoidal fin search</div>
+    </div>
+  </div>
+  <div class="header-status">
+    <span class="status-dot" id="engine-dot"></span>
+    <span id="engine-text">engine ready</span>
+  </div>
+</header>
+
+<main>
+  <!-- ============ LEFT: INPUTS ============ -->
+  <div class="col">
+    <form id="design-form">
+
+      <div class="section">
+        <div class="section-title">Body Tube &amp; Nose</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Diameter <span class="unit">mm</span></label>
+            <input type="number" id="diameter_mm" value="98" step="0.1" required>
+          </div>
+          <div class="field">
+            <label>Nose length <span class="unit">mm</span></label>
+            <input type="number" id="nose_length_mm" value="350" step="1" required>
+          </div>
+        </div>
+        <div class="field">
+          <label>Nose shape</label>
+          <select id="nose_type">
+            <option value="ogive" selected>Tangent ogive</option>
+            <option value="conical">Conical</option>
+            <option value="parabolic">Parabolic</option>
+            <option value="elliptical">Elliptical</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          Mass Components
+          <button type="button" class="btn" id="add-component">+ add</button>
+        </div>
+        <div id="component-list"></div>
+        <div class="hint">Every component that isn't the fins: nose, payload, avionics bay, motor, recovery gear. Enter each mass and its distance from the nose tip. Fin mass is added automatically from the optimized/tuned geometry.</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Fin Set</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Count</label>
+            <input type="number" id="fin_count" value="3" min="3" max="8" step="1">
+          </div>
+          <div class="field">
+            <label>Root LE position <span class="unit">mm from nose</span></label>
+            <input type="number" id="fin_position_mm" value="1350" step="1">
+          </div>
+        </div>
+        <div class="field">
+          <label>Material</label>
+          <select id="material">
+            {% for m in materials %}
+            <option value="{{ m }}">{{ m.replace('_', ' ') }}</option>
+            {% endfor %}
+            <option value="custom">custom…</option>
+          </select>
+        </div>
+        <div class="field-row" id="custom-material-row" style="display:none;">
+          <div class="field">
+            <label>Density <span class="unit">kg/m³</span></label>
+            <input type="number" id="custom_density" value="680">
+          </div>
+          <div class="field">
+            <label>Shear modulus <span class="unit">Pa</span></label>
+            <input type="number" id="custom_shear" value="2.8e9">
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Flight Conditions</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Max velocity <span class="unit">m/s</span></label>
+            <input type="number" id="max_velocity" value="250" step="1">
+          </div>
+          <div class="field">
+            <label>Flutter check altitude <span class="unit">m ASL</span></label>
+            <input type="number" id="altitude_m" value="500" step="10">
+          </div>
+        </div>
+        <div class="field">
+          <label>Flutter safety factor</label>
+          <input type="number" id="safety_factor" value="1.15" step="0.05" min="1">
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Stability Target</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Target margin <span class="unit">calibers</span></label>
+            <input type="number" id="target_margin" value="1.5" step="0.1">
+          </div>
+          <div class="field">
+            <label>Tolerance <span class="unit">± calibers</span></label>
+            <input type="number" id="margin_tolerance" value="0.3" step="0.05">
+          </div>
+        </div>
+        <div class="hint">1.0–2.0 calibers is the conventional safe range for subsonic sport rockets. Higher isn't automatically better: it adds fin mass, wets more area, and can push flutter margin down.</div>
+      </div>
+
+      <button type="submit" class="btn-primary" id="optimize-btn">Optimize fins</button>
+    </form>
+  </div>
+
+  <!-- ============ RIGHT: RESULTS ============ -->
+  <div class="col">
+    <div id="error-slot"></div>
+
+    <div class="view-tabs">
+      <button type="button" class="view-tab active" data-view="3d">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/><path d="M3 7l9 5 9-5M12 12v10" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        3D Model
+      </button>
+      <button type="button" class="view-tab" data-view="2d">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M4 20V4h16M4 15l5-5 4 3 6-7" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Stability Diagram
+      </button>
+    </div>
+
+    <div class="diagram-wrap">
+      <div id="view-3d" class="view-pane active">
+        <div id="viewer-container"></div>
+        <div class="viewer-toolbar">
+          <button type="button" class="vtool" id="vt-iso" title="Isometric view">ISO</button>
+          <button type="button" class="vtool" id="vt-front" title="Front view">FRONT</button>
+          <button type="button" class="vtool" id="vt-top" title="Top view">TOP</button>
+          <span class="vtool-sep"></span>
+          <button type="button" class="vtool" id="vt-wire" title="Toggle wireframe">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M3 3h18v18H3z" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke="currentColor" stroke-width="1"/></svg>
+          </button>
+          <button type="button" class="vtool" id="vt-rotate" title="Auto-rotate">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M21 12a9 9 0 1 1-3-6.7" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/><path d="M21 3v5h-5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="viewer-hint">drag to rotate · right-drag or two-finger to pan · scroll to zoom</div>
+      </div>
+      <div id="view-2d" class="view-pane">
+        <svg id="diagram" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+
+    <div id="results-slot">
+      <div class="placeholder">Set your design inputs and run the optimizer to see the fin geometry, stability margin, and flutter check here.</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Center-of-pressure via Barrowman's equations. Flutter boundary via the semi-empirical NACA-derived
+  equation used across amateur/high-power rocketry (per Apogee Components' published flutter analysis
+  method). These are standard preliminary design methods — validate a final design against flight data,
+  ground vibration testing, or a full aeroelastic analysis before flying transonic/supersonic or on a
+  high-value airframe.
+</footer>
+
+<script type="module" src="{{ url_for('static', filename='viewer3d.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

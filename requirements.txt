@@ -1,0 +1,14 @@
+# Pinned to exact versions for reproducible installs (see CHANGELOG for the
+# dependency-health fix this addresses). Bump deliberately, not implicitly.
+#
+# For a fully hash-locked, transitive-dependency lockfile, generate one with
+# your tool of choice, e.g.:
+#   pip install pip-tools && pip-compile --generate-hashes -o requirements.lock requirements.txt
+# or
+#   uv pip compile requirements.txt -o requirements.lock
+
+Flask==3.1.3
+numpy==2.4.4
+scipy==1.17.1
+pydantic==2.13.5
+Werkzeug==3.1.7

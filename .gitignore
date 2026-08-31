@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+
+# Flask
+instance/
+.flaskenv
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Env files (never commit secrets)
+.env
+.env.*
+!.env.example
