@@ -11,10 +11,12 @@ supersonic vehicles):
 
   * Center of pressure: Barrowman's equations (Barrowman & Barrowman, 1966;
     "The Theoretical Prediction of the Center of Pressure", NAR TR-11).
-  * Fin flutter boundary: the semi-empirical NACA-derived equation commonly
-    used across amateur rocketry (see e.g. Apogee Components Peak-of-Flight
-    Newsletter #348, "Fin Flutter Analysis", and OpenRocket's technical
-    documentation, both of which trace back to the same NACA source).
+  * Fin flutter boundary: Martin's semi-empirical equation, NACA TN 4197
+    (Martin, "Summary of Flutter Experiences as a Guide to the Preliminary
+    Design of Lifting Surfaces on Missiles", 1958), Equation 18, verified
+    directly against the primary source. See flutter_velocity() docstring
+    for the full citation and a note on a common transcription error in
+    web copies of this equation.
   * Standard atmosphere: ISA troposphere model (valid to 11 km).
 
 All internal calculations are SI (meters, kilograms, pascals, seconds).
@@ -160,6 +162,21 @@ def nose_cp(body: BodyParams) -> tuple[float, float]:
     return factor * body.nose_length_m, 2.0
 
 
+def fin_mid_chord_sweep(Cr: float, Ct: float, Xr: float) -> float:
+    """Axial distance the fin's MID-chord line sweeps back, from root to
+    tip. Barrowman's equations (and Martin's flutter derivation) both call
+    for this quantity - NOT the leading-edge sweep (Xr) that a builder
+    would actually measure and cut. The two only coincide when Cr == Ct
+    (an unswept/rectangular fin); for a tapered fin they differ by half
+    the taper: lm = Xr - (Cr - Ct) / 2.
+
+    Derivation: with the root leading edge at local x=0, the root
+    mid-chord sits at x=Cr/2. The tip leading edge sits at x=Xr, so the
+    tip mid-chord sits at x=Xr+Ct/2. The difference of those two is lm.
+    """
+    return Xr - (Cr - Ct) / 2.0
+
+
 def fin_set_cn_alpha(fin: FinGeometry, body_diameter_m: float) -> tuple[float, float]:
     """Returns (CN_alpha_fins, Kfb interference factor) for the whole fin
     set, per Barrowman."""
@@ -167,17 +184,23 @@ def fin_set_cn_alpha(fin: FinGeometry, body_diameter_m: float) -> tuple[float, f
                          fin.sweep_m, fin.count)
     Rt = body_diameter_m / 2.0
     Kfb = 1.0 + Rt / (s + Rt)
-    denom = 1.0 + math.sqrt(1.0 + (2.0 * Xr / (Cr + Ct)) ** 2) if (Cr + Ct) > 0 else 1.0
+    lm = fin_mid_chord_sweep(Cr, Ct, Xr)
+    denom = 1.0 + math.sqrt(1.0 + (2.0 * lm / (Cr + Ct)) ** 2) if (Cr + Ct) > 0 else 1.0
     cn_alpha = Kfb * (4.0 * N * (s / body_diameter_m) ** 2) / denom
     return cn_alpha, Kfb
 
 
 def fin_cp_offset_from_root_le(Cr: float, Ct: float, Xr: float) -> float:
     """Barrowman's closed-form axial distance from the fin root leading
-    edge to the fin set's center of pressure."""
+    edge to the fin set's center of pressure. Uses the mid-chord sweep
+    (see fin_mid_chord_sweep) in the first term, per the primary
+    equation - passing the leading-edge sweep directly here is a common
+    transcription error that shifts the computed CP for any tapered,
+    swept fin."""
     if (Cr + Ct) == 0:
         return 0.0
-    term1 = (Xr * (Cr + 2.0 * Ct)) / (3.0 * (Cr + Ct))
+    lm = fin_mid_chord_sweep(Cr, Ct, Xr)
+    term1 = (lm * (Cr + 2.0 * Ct)) / (3.0 * (Cr + Ct))
     term2 = (1.0 / 6.0) * (Cr + Ct - (Cr * Ct) / (Cr + Ct))
     return term1 + term2
 
@@ -237,16 +260,41 @@ FT_PER_M = 3.280839895
 
 
 def flutter_velocity(fin: FinGeometry, material: FinMaterial, altitude_m: float) -> dict:
-    """Semi-empirical fin flutter boundary velocity (NACA TN 4197 flutter
-    boundary equation, as commonly used in amateur rocketry references).
+    """Semi-empirical fin flutter boundary velocity, from Martin's original
+    derivation: NACA TN 4197 (Martin, 1958), Equation 18:
 
-    IMPORTANT: this equation's constant (1.337) is only valid when the
-    shear modulus is in psi and the speed of sound is in ft/s - it is not
-    a dimensionally-general SI formula, even though every other quantity
-    in it is dimensionless. This function converts to those units
-    internally and converts the result back to m/s so the rest of the
-    tool can stay in SI throughout.
+        (Vf/a)^2 = GE / [ (39.3*A^3 / ((t/c)^3*(A+2))) * ((lambda+1)/2) * (p/p0) ]
+
+    verified directly against the primary source (NASA Technical Reports
+    Server, ntrs.nasa.gov, report 19930085030). GE and the constant 39.3
+    are calibrated for GE in psi; A is the exposed panel aspect ratio of
+    ONE fin (span^2/area); p/p0 is a dimensionless pressure ratio; the
+    39.3 constant assumes the fin's center of gravity sits at 25% chord
+    (epsilon=0.25), which Martin's paper notes is exact for symmetric
+    sections - the standard assumption for a uniform-thickness flat-plate
+    fin, which is what this tool models.
+
+    A widely-copied web version of this equation (originally from Apogee
+    Components' Peak-of-Flight Newsletter #291, and reproduced across many
+    amateur rocketry sites and tools) uses the constant 1.337 instead of
+    39.3. That constant is NOT a re-derivation of Martin's formula - it
+    substantially overestimates flutter velocity (by roughly 5x in the
+    denominator's constant term), which is the wrong direction for a
+    safety check. This was confirmed by cross-referencing an AFIT Master's
+    thesis (Simmons, 2009, DTIC ADA502110) that used the correct
+    (Vf/a)^2 = ... /39.3... form to correctly predict a real fin-flutter
+    failure (USAFA's FalconLAUNCH V) and its successful redesign
+    (FalconLAUNCH VI).
+
+    IMPORTANT: this equation's constant is only valid when the shear
+    modulus is in psi and the speed of sound is in ft/s - it is not a
+    dimensionally-general SI formula, even though every other quantity in
+    it is dimensionless. This function converts to those units internally
+    and converts the result back to m/s so the rest of the tool can stay
+    in SI throughout.
     """
+    FLUTTER_DN = 39.3  # Martin's denominator constant, epsilon=0.25 (NACA TN 4197 eq. 18)
+
     Cr, Ct, s, t = fin.root_chord_m, fin.tip_chord_m, fin.span_m, fin.thickness_m
     a_ms, P = atmosphere(altitude_m)
 
@@ -263,7 +311,7 @@ def flutter_velocity(fin: FinGeometry, material: FinMaterial, altitude_m: float)
     G_psi = material.shear_modulus_pa / PA_PER_PSI
     a_fps = a_ms * FT_PER_M
 
-    denom = 1.337 * (AR ** 3) * P * (taper + 1.0)
+    denom = FLUTTER_DN * (AR ** 3) * P * (taper + 1.0)
     numer = 2.0 * (AR + 2.0) * (t_over_c ** 3)
     stiffness_term = G_psi / (denom / numer)
     vf_fps = a_fps * math.sqrt(stiffness_term) if stiffness_term > 0 else 0.0
